@@ -352,8 +352,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-- **Documentation**: [GitHub Wiki](https://github.com/yourusername/captain-payment/wiki)
-- **Issues**: [GitHub Issues](https://github.com/yourusername/captain-payment/issues)
+- **Documentation**: [GitHub Wiki](https://github.com/tobikareem/CaptainPayment/wiki)
+- **Issues**: [GitHub Issues](https://github.com/tobikareem/CaptainPayment/issues)
 - **Email**: general@tobikareem.com
 
 ## 🔄 Changelog
