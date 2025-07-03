@@ -2,6 +2,7 @@
 using CaptainPayment.Core.Exceptions;
 using CaptainPayment.Core.Interfaces;
 using CaptainPayment.Core.Models;
+using CaptainPayment.Stripe.Extension;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Stripe;
@@ -38,21 +39,45 @@ public class StripeProductService : IProductService
                 Name = request.Name,
                 Description = request.Description,
                 Active = request.Active ?? true,
-                Images = request.Images,
-                Metadata = request.Metadata,
-                PackageDimensions =  new ProductPackageDimensionsOptions
+                Images = request.Images.Any() ? request.Images : null,
+                Metadata = request.Metadata.Any() ? request.Metadata : null, Shippable = request.Shippable,
+                StatementDescriptor = !string.IsNullOrWhiteSpace(request.StatementDescriptor) ? request.StatementDescriptor : null,
+                TaxCode = !string.IsNullOrWhiteSpace(request.TaxCode) ? request.TaxCode : null,
+                UnitLabel = !string.IsNullOrWhiteSpace(request.UnitLabel) ? request.UnitLabel : null,
+                Url = !string.IsNullOrWhiteSpace(request.Url) ? request.Url : null,
+            };
+
+            if (request.PackageDimensions.Height > 0 ||
+                request.PackageDimensions.Length > 0 ||
+                request.PackageDimensions.Weight > 0 ||
+                request.PackageDimensions.Width > 0)
+            {
+                options.PackageDimensions = new ProductPackageDimensionsOptions
                 {
                     Height = request.PackageDimensions.Height,
                     Length = request.PackageDimensions.Length,
                     Weight = request.PackageDimensions.Weight,
                     Width = request.PackageDimensions.Width
-                },
-                Shippable = request.Shippable,
-                StatementDescriptor = request.StatementDescriptor,
-                TaxCode = request.TaxCode,
-                UnitLabel = request.UnitLabel,
-                Url = request.Url
-            };
+                };
+            }
+
+            if (!string.IsNullOrWhiteSpace(request.Currency) && request.AmountInCents > 0)
+            {
+                options.DefaultPriceData = new ProductDefaultPriceDataOptions
+                {
+                    Currency = request.Currency.ToLowerInvariant(),
+                    UnitAmount = request.AmountInCents
+                };
+                
+                if (request.Interval != StripeInterval.None) 
+                {
+                    options.DefaultPriceData.Recurring = new ProductDefaultPriceDataRecurringOptions
+                    {
+                        Interval = request.Interval.GetDisplayName(),
+                        IntervalCount = 1
+                    };
+                }
+            }
 
             var product = await service.CreateAsync(options, cancellationToken: cancellationToken);
 
@@ -196,21 +221,26 @@ public class StripeProductService : IProductService
             {
                 Product = request.ProductId,
                 Currency = request.Currency.ToLowerInvariant(),
-                UnitAmount = (long)(request.UnitAmount * 100), // Convert to cents
+                UnitAmount = (long)request.UnitAmount,
                 Active = request.Active ?? true,
-                Metadata = request.Metadata,
-                Nickname = request.Nickname,
-                TaxBehavior = request.TaxBehavior,
-                TransferLookupKey = request.TransferLookupKey
+                Metadata = request.Metadata.Any() ? request.Metadata : null,
+                Nickname = !string.IsNullOrWhiteSpace(request.Nickname) ? request.Nickname : null,
+                TaxBehavior = !string.IsNullOrWhiteSpace(request.TaxBehavior) ? request.TaxBehavior : null,
             };
 
-            // Handle recurring pricing
-            options.Recurring = new PriceRecurringOptions
+            if (request.Recurring.Interval != StripeInterval.None)
             {
-                Interval = request.Recurring.Interval,
-                IntervalCount = request.Recurring.IntervalCount,
-                UsageType = request.Recurring.UsageType
-            };
+                options.Recurring = new PriceRecurringOptions
+                {
+                    Interval = request.Recurring.Interval.GetDisplayName(),
+                    IntervalCount = request.Recurring.IntervalCount ?? 1,
+                };
+                
+                if (request.Recurring.UsageType != StripeUsageType.None)
+                {
+                    options.Recurring.UsageType = request.Recurring.UsageType.GetDisplayName();
+                }
+            }
 
             // Handle tiered pricing
             if (request.Tiers.Any())
@@ -220,8 +250,8 @@ public class StripeProductService : IProductService
                 options.Tiers = request.Tiers.Select(t => new PriceTierOptions
                 {
                     UpTo = t.UpTo,
-                    UnitAmount = t.UnitAmount.HasValue ? (long)(t.UnitAmount.Value * 100) : null,
-                    FlatAmount = t.FlatAmount.HasValue ? (long)(t.FlatAmount.Value * 100) : null
+                    UnitAmount = t.UnitAmount.HasValue ? (long)t.UnitAmount.Value : null,
+                    FlatAmount = t.FlatAmount.HasValue ? (long)t.FlatAmount.Value : null
                 }).ToList();
             }
 
@@ -340,7 +370,39 @@ public class StripeProductService : IProductService
             throw new ArgumentNullException(nameof(request));
 
         if (string.IsNullOrWhiteSpace(request.Name))
-            throw new ArgumentException("Product name is required", nameof(request));
+            throw new ArgumentException("Product name is required", nameof(request.Name));
+
+        if (request.Name.Length > 250)
+            throw new ArgumentException("Product name cannot exceed 250 characters", nameof(request.Name));
+
+        if (!string.IsNullOrWhiteSpace(request.Currency))
+        {
+            if (request.Currency.Length != 3)
+                throw new ArgumentException("Currency must be a 3-letter ISO code", nameof(request.Currency));
+
+            if (request.AmountInCents <= 0)
+                throw new ArgumentException("Amount must be greater than 0 when currency is provided",
+                    nameof(request.AmountInCents));
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.StatementDescriptor) &&
+            request.StatementDescriptor.Length > 22)
+            throw new ArgumentException("Statement descriptor cannot exceed 22 characters",
+                nameof(request.StatementDescriptor));
+
+        if (!string.IsNullOrWhiteSpace(request.Url) &&
+            !Uri.TryCreate(request.Url, UriKind.Absolute, out _))
+            throw new ArgumentException("Invalid URL format", nameof(request.Url));
+
+        if (request.Images.Count > 8)
+            throw new ArgumentException("Cannot have more than 8 images", nameof(request.Images));
+
+        if (request.Metadata.Count > 50)
+            throw new ArgumentException("Cannot have more than 50 metadata keys", nameof(request.Metadata));
+
+        if (request.Metadata.Any(kvp =>
+                kvp.Key.Length > 40 || kvp.Value.Length > 500))
+            throw new ArgumentException("Metadata keys cannot exceed 40 characters and values cannot exceed 500 characters");
     }
 
     private static void ValidateCreatePriceRequest(CreatePriceRequest request)
