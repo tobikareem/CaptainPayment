@@ -83,12 +83,16 @@ public class StripeCustomerService : ICustomerService
                 Description = request.Description,
                 Address = MapToStripeAddress(request.Address),
                 Shipping = MapToStripeShipping(request.ShippingAddress, request.Name),
-                Metadata = request.Metadata,
-                InvoiceSettings = new CustomerInvoiceSettingsOptions
+                Metadata = request.Metadata
+            };
+            
+            if (!string.IsNullOrWhiteSpace(request.DefaultPaymentMethodId))
+            {
+                options.InvoiceSettings = new CustomerInvoiceSettingsOptions
                 {
                     DefaultPaymentMethod = request.DefaultPaymentMethodId
-                }
-            };
+                };
+            }
 
             var customer = await service.UpdateAsync(customerId, options, cancellationToken: cancellationToken);
 
@@ -206,16 +210,28 @@ public class StripeCustomerService : ICustomerService
             Name = request.Name,
             Phone = request.Phone,
             Description = request.Description,
-            Address = MapToStripeAddress(request.Address),
-            Shipping = MapToStripeShipping(request.ShippingAddress, request.Name),
             TaxExempt = request.TaxExempt,
-            Metadata = request.Metadata,
-            PaymentMethod = request.DefaultPaymentMethodId,
-            InvoiceSettings = new CustomerInvoiceSettingsOptions
+            Metadata = request.Metadata
+        };
+        
+        if (request.Address != null && !string.IsNullOrWhiteSpace(request.Address.Line1))
+        {
+            options.Address = MapToStripeAddress(request.Address);
+        }
+        
+        if (request.ShippingAddress != null && !string.IsNullOrWhiteSpace(request.ShippingAddress.Line1))
+        {
+            options.Shipping = MapToStripeShipping(request.ShippingAddress, request.Name);
+        }
+        
+        if (!string.IsNullOrWhiteSpace(request.DefaultPaymentMethodId))
+        {
+            options.PaymentMethod = request.DefaultPaymentMethodId;
+            options.InvoiceSettings = new CustomerInvoiceSettingsOptions
             {
                 DefaultPaymentMethod = request.DefaultPaymentMethodId
-            }
-        };
+            };
+        }
 
         return options;
     }
@@ -267,10 +283,10 @@ public class StripeCustomerService : ICustomerService
             Delinquent = customer.Delinquent.GetValueOrDefault(),
             DefaultSource = customer.DefaultSourceId,
             InvoicePrefix = customer.InvoicePrefix,
-            Address = MapFromStripeAddress(customer.Address),
-            ShippingAddress = MapFromStripeAddress(customer.Shipping.Address),
+            Address = (customer.Address != null ? MapFromStripeAddress(customer.Address) : null) ?? new CustomerAddress(),
+            ShippingAddress = (customer.Shipping?.Address != null ? MapFromStripeAddress(customer.Shipping.Address) : null) ?? new CustomerAddress(),
             TaxExempt = customer.TaxExempt,
-            Metadata = customer.Metadata,
+            Metadata = customer.Metadata ?? new Dictionary<string, string>(),
             LiveMode = customer.Livemode
         };
     }
