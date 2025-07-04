@@ -47,6 +47,7 @@ public static class ServiceCollection
         services.AddScoped<ICustomerService, StripeCustomerService>();
         services.AddScoped<IProductService, StripeProductService>();
         services.AddScoped<IPaymentMethodService, StripePaymentMethodService>();
+        services.AddScoped<ISetupIntentService, StripeSetupIntentService>();
 
         return services;
     }
