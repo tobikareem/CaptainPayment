@@ -244,6 +244,7 @@ public class StripeSubscriptionService : IPaymentProvider, ISubscriptionService
             TrialStart = sub.TrialStart,
             TrialEnd = sub.TrialEnd,
             CanceledAt = sub.CanceledAt,
+            SubscriptionEndDate = sub.CancelAt,
             CreatedAt = sub.Created,
             PriceId = item?.Price?.Id,
             ProductId = item?.Price?.ProductId,

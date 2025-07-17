@@ -16,4 +16,5 @@ public class SubscriptionDetails
     public DateTime CreatedAt { get; set; }
     public string PriceId { get; set; } = string.Empty;
     public string ProductId { get; set; } = string.Empty;
+    public DateTime? SubscriptionEndDate { get; set; }
 }
